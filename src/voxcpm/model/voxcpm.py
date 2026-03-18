@@ -78,7 +78,7 @@ class VoxCPMConfig(BaseModel):
     audio_vae_config: Optional[AudioVAEConfig] = None
 
     max_length: int = 4096
-    device: str = "cuda"
+    device: str = None  # None 表示自动检测
     dtype: str = "bfloat16"
     dit_mean_mode: bool = False
 
@@ -115,12 +115,15 @@ class VoxCPMModel(nn.Module):
         self.lora_config = lora_config
         self.feat_dim = config.feat_dim
         self.patch_size = config.patch_size
-        self.device = config.device
-        if not torch.cuda.is_available():
-            if torch.backends.mps.is_available():
-                self.device = "mps"
-            else:
-                self.device = "cpu"
+        # 动态设备检测
+        if config.device is not None:
+            self.device = config.device
+        elif torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
         print(f"Running on device: {self.device}, dtype: {self.config.dtype}", file=sys.stderr)
 
         # Text-Semantic LM
@@ -217,19 +220,24 @@ class VoxCPMModel(nn.Module):
     def optimize(self, disable: bool = False):
         if disable:
             return self
+        if self.device == "cpu":
+            print("Warning: torch.compile not supported on CPU, skipping optimization", file=sys.stderr)
+            return self
+        if self.device == "mps":
+            print("Warning: torch.compile not fully supported on MPS, skipping optimization", file=sys.stderr)
+            return self
         try:
-            if self.device != "cuda":
-                raise ValueError("VoxCPMModel can only be optimized on CUDA device")
-            try:
-                import triton
-            except ImportError:
-                raise ValueError("triton is not installed")
+            import triton
+        except ImportError:
+            print("Warning: triton not installed, skipping torch.compile", file=sys.stderr)
+            return self
+        try:
             self.base_lm.forward_step = torch.compile(self.base_lm.forward_step, mode="reduce-overhead", fullgraph=True)
             self.residual_lm.forward_step = torch.compile(self.residual_lm.forward_step, mode="reduce-overhead", fullgraph=True)
             self.feat_encoder = torch.compile(self.feat_encoder, mode="reduce-overhead", fullgraph=True)
             self.feat_decoder.estimator = torch.compile(self.feat_decoder.estimator, mode="reduce-overhead", fullgraph=True)
         except Exception as e:
-            print(f"Warning: torch.compile disabled - {e}", file=sys.stderr)
+            print(f"Warning: torch.compile failed - {e}", file=sys.stderr)
         return self
 
     def forward(

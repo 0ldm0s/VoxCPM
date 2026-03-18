@@ -8,6 +8,13 @@ import shutil
 import datetime
 import subprocess
 import threading
+
+# 解决 macOS M1/M2/M3 系列芯片上 Intel OpenMP 与 LLVM OpenMP 冲突问题
+# 在 import torch 之前设置，避免 OMP 冲突警告
+if sys.platform == "darwin":
+    if __import__("platform").machine() == "arm64":
+        os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import gradio as gr
 import torch
 import soundfile as sf
@@ -105,7 +112,12 @@ def get_or_load_asr_model():
     global asr_model
     if asr_model is None:
         print("Loading ASR model (SenseVoiceSmall)...", file=sys.stderr)
-        device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            device = "cuda:0"
+        elif torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
         asr_model = AutoModel(
             model="iic/SenseVoiceSmall",
             disable_update=True,

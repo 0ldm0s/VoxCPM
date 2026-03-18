@@ -212,9 +212,12 @@ class UnifiedCFM(torch.nn.Module):
         if self.mean_mode:
             v_r = torch.zeros_like(r)
             v_t = torch.ones_like(t)
-            from torch.backends.cuda import sdp_kernel
-
-            with sdp_kernel(enable_flash=False, enable_mem_efficient=False):
+            if torch.cuda.is_available():
+                from torch.backends.cuda import sdp_kernel
+                with sdp_kernel(enable_flash=False, enable_mem_efficient=False):
+                    u_pred, dudt = jvp(model_fn, (y, r, t), (v, v_r, v_t))
+            else:
+                # 非 CUDA 设备直接计算
                 u_pred, dudt = jvp(model_fn, (y, r, t), (v, v_r, v_t))
             u_tgt = v - (t_ - r_).view(-1, 1, 1) * dudt
         else:

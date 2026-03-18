@@ -1,8 +1,16 @@
 import os
 import sys
+
+# 解决 macOS M1/M2/M3 系列芯片上 Intel OpenMP 与 LLVM OpenMP 冲突问题
+# 在 import torch 之前设置，避免 OMP 冲突警告
+if sys.platform == "darwin":
+    import platform
+    if platform.machine() == "arm64":
+        os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import numpy as np
 import torch
-import gradio as gr  
+import gradio as gr
 import spaces
 from typing import Optional, Tuple
 from funasr import AutoModel
@@ -16,7 +24,12 @@ import voxcpm
 
 class VoxCPMDemo:
     def __init__(self) -> None:
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        if torch.cuda.is_available():
+            self.device = "cuda"
+        elif torch.backends.mps.is_available():
+            self.device = "mps"
+        else:
+            self.device = "cpu"
         print(f"🚀 Running on device: {self.device}", file=sys.stderr)
 
         # ASR model for prompt text recognition

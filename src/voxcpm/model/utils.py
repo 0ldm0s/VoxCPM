@@ -107,8 +107,13 @@ def mask_multichar_chinese_tokens(tokenizer: PreTrainedTokenizer):
 
 def get_dtype(dtype: str):
     if dtype == "bfloat16":
+        # MPS 不支持 bfloat16，回退到 float32
+        if torch.backends.mps.is_available():
+            return torch.float32
         return torch.bfloat16
     elif dtype == "bf16":
+        if torch.backends.mps.is_available():
+            return torch.float32
         return torch.bfloat16
     elif dtype == "float16":
         return torch.float16

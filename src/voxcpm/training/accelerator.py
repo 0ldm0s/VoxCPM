@@ -46,7 +46,16 @@ class Accelerator:
             def update(self):
                 pass
 
-        self.scaler = torch.amp.GradScaler("cuda") if (amp and torch.cuda.is_available()) else DummyScaler()
+        # 添加设备类型检测辅助方法
+        def _get_amp_device_type(self):
+            if torch.cuda.is_available():
+                return "cuda"
+            elif torch.backends.mps.is_available():
+                return "mps"
+            return "cpu"
+
+        self._get_amp_device_type = _get_amp_device_type.__get__(self, Accelerator)
+        self.scaler = torch.amp.GradScaler(self._get_amp_device_type()) if amp and self._get_amp_device_type() != "cpu" else DummyScaler()
         self.device_ctx = (
             torch.cuda.device(self.local_rank) if torch.cuda.is_available() else None
         )
@@ -117,7 +126,11 @@ class Accelerator:
     # AMP helpers
     # ------------------------------------------------------------------ #
     def autocast(self, *args, **kwargs):
-        return torch.amp.autocast("cuda", enabled=self.amp, *args, **kwargs)
+        device_type = self._get_amp_device_type()
+        if device_type == "cpu":
+            # CPU 不支持 AMP，返回无操作上下文
+            return contextlib.nullcontext()
+        return torch.amp.autocast(device_type, enabled=self.amp, *args, **kwargs)
 
     def backward(self, loss: torch.Tensor):
         self.scaler.scale(loss).backward()
