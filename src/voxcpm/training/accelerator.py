@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import os
 import random
+import sys
 import typing
 
 import numpy as np
@@ -20,11 +21,27 @@ class Accelerator:
     preparing models/dataloaders for DDP.
     """
 
-    def __init__(self, amp: bool = False, seed: int = 42):
-        self.world_size = int(os.getenv("WORLD_SIZE", "1"))
+    def __init__(self, amp: bool = False, seed: int = 42, distributed: bool = True):
+        # distributed=False 时强制禁用分布式训练，覆盖 WORLD_SIZE 环境变量
+        if not distributed:
+            self.world_size = 1
+        else:
+            self.world_size = int(os.getenv("WORLD_SIZE", "1"))
+
+            # macOS 默认单设备训练：除非明确通过 torchrun 启动（检测 RANK/LOCAL_RANK 环境变量），
+            # 否则强制禁用分布式以避免 NCCL 错误
+            if sys.platform == "darwin" and self.world_size > 1:
+                # 检查是否真正通过 torchrun 启动（有 RANK 环境变量）
+                if os.getenv("RANK") is None and os.getenv("LOCAL_RANK") is None:
+                    print("[Info] Apple Silicon detected without torchrun, forcing single-device mode.")
+                    self.world_size = 1
 
         if self.world_size > 1 and not dist.is_initialized():
-            dist.init_process_group("nccl", init_method="env://")
+            # macOS 上使用 Gloo 后端替代 NCCL（NCCL 在 macOS 上不可用）
+            if sys.platform == "darwin":
+                dist.init_process_group("gloo", init_method="env://")
+            else:
+                dist.init_process_group("nccl", init_method="env://")
 
         self.rank = dist.get_rank() if dist.is_initialized() else 0
         self.local_rank = int(os.environ.get("LOCAL_RANK", "0"))

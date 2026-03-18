@@ -19,6 +19,15 @@ import os
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
+
+def _get_audio_device():
+    """检测音频生成使用的设备类型"""
+    if torch.cuda.is_available():
+        return "cuda"
+    elif torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
 try:
     from safetensors.torch import save_file
     SAFETENSORS_AVAILABLE = True
@@ -63,6 +72,7 @@ def train(
     # Distribution options (for LoRA checkpoints)
     hf_model_id: str = "",   # HuggingFace model ID (e.g., "openbmb/VoxCPM1.5")
     distribute: bool = False, # If True, save hf_model_id as base_model; otherwise save pretrained_path
+    distributed: bool = True,  # If True, enable distributed training (multi-GPU); set False for single-device
 ):
     _ = config_path
     
@@ -70,7 +80,7 @@ def train(
     if lora is not None and distribute and not hf_model_id:
         raise ValueError("hf_model_id is required when distribute=True")
     
-    accelerator = Accelerator(amp=True)
+    accelerator = Accelerator(amp=True, distributed=distributed)
 
     save_dir = Path(save_path)
     tb_dir = Path(tensorboard) if tensorboard else save_dir / "logs"
@@ -107,6 +117,10 @@ def train(
 
     dataset_cnt = int(max(train_ds["dataset_id"])) + 1 if "dataset_id" in train_ds.column_names else 1
     num_train_samples = len(train_ds)
+
+    # macOS 上使用 num_workers=0 避免潜在问题
+    if sys.platform == "darwin":
+        num_workers = 0
 
     # ------------------------------------------------------------------ #
     # Optional: filter samples by estimated token count to avoid OOM
@@ -482,9 +496,10 @@ def generate_sample_audio(model, val_ds, audio_vae, writer, step, accelerator, s
             unwrapped_model.audio_vae = audio_vae.to(torch.float32)
             
             log(f"[Audio] Generating sample {i} with text: '{text[:50]}...'")
+            audio_device = _get_audio_device()
             autocast_ctx = (
-                torch.autocast(device_type="cuda", dtype=torch.bfloat16)
-                if torch.cuda.is_available()
+                torch.autocast(device_type=audio_device, dtype=torch.bfloat16)
+                if audio_device != "cpu"
                 else contextlib.nullcontext()
             )
             with torch.no_grad():
