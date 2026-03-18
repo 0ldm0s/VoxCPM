@@ -216,22 +216,22 @@ def create_demo_interface(demo: VoxCPMDemo):
                 prompt_wav = gr.Audio(
                     sources=["upload", 'microphone'],
                     type="filepath",
-                    label="Prompt Speech (Optional, or let VoxCPM improvise)",
+                    label="参考音频（可选，不提供则由 VoxCPM 即兴创作）",
                     value="./examples/example.wav",
                 )
                 DoDenoisePromptAudio = gr.Checkbox(
                     value=False,
-                    label="Prompt Speech Enhancement",
+                    label="参考音频降噪",
                     elem_id="chk_denoise",
-                    info="We use ZipEnhancer model to denoise the prompt audio."
+                    info="使用 ZipEnhancer 模型对参考音频进行降噪处理"
                 )
                 with gr.Row():
                     prompt_text = gr.Textbox(
-                        value="Just by listening a few minutes a day, you'll be able to eliminate negative thoughts by conditioning your mind to be more positive.",
-                        label="Prompt Text",
-                        placeholder="Please enter the prompt text. Automatic recognition is supported, and you can correct the results yourself..."
+                        value="每天只需聆听几分钟，你就能通过积极的心态消除负面想法。",
+                        label="参考文本",
+                        placeholder="请输入参考文本。支持自动识别，您可以自行修正结果..."
                     )
-                run_btn = gr.Button("Generate Speech", variant="primary")
+                run_btn = gr.Button("🎤 生成语音", variant="primary")
 
             with gr.Column():
                 cfg_value = gr.Slider(
@@ -239,30 +239,30 @@ def create_demo_interface(demo: VoxCPMDemo):
                     maximum=3.0,
                     value=2.0,
                     step=0.1,
-                    label="CFG Value (Guidance Scale)",
-                    info="Higher values increase adherence to prompt, lower values allow more creativity"
+                    label="CFG 值（引导强度）",
+                    info="值越高越贴合参考音频风格，越低越有创意"
                 )
                 inference_timesteps = gr.Slider(
                     minimum=4,
                     maximum=30,
                     value=10,
                     step=1,
-                    label="Inference Timesteps",
-                    info="Number of inference timesteps for generation (higher values may improve quality but slower)"
+                    label="推理步数",
+                    info="生成使用的推理步数（值越高质量越好但越慢）"
                 )
                 with gr.Row():
                     text = gr.Textbox(
-                        value="VoxCPM is an innovative end-to-end TTS model from ModelBest, designed to generate highly realistic speech.",
-                        label="Target Text",
+                        value="VoxCPM 是来自 ModelBest 的创新性端到端 TTS 模型，专为生成高度真实的语音而设计。",
+                        label="目标文本",
                     )
                 with gr.Row():
                     DoNormalizeText = gr.Checkbox(
                         value=False,
-                        label="Text Normalization",
+                        label="文本正则化",
                         elem_id="chk_normalize",
-                        info="We use wetext library to normalize the input text."
+                        info="使用 wetext 库对输入文本进行正则化处理"
                     )
-                audio_output = gr.Audio(label="Output Audio")
+                audio_output = gr.Audio(label="输出音频")
 
         # Wiring
         run_btn.click(
