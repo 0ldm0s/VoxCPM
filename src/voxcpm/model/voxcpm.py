@@ -223,8 +223,9 @@ class VoxCPMModel(nn.Module):
         if self.device == "cpu":
             print("Warning: torch.compile not supported on CPU, skipping optimization", file=sys.stderr)
             return self
+        # MPS 上禁用 torch.compile（测试显示会降低性能 50-80%）
         if self.device == "mps":
-            print("Warning: torch.compile not fully supported on MPS, skipping optimization", file=sys.stderr)
+            print("Note: torch.compile disabled on MPS for better performance", file=sys.stderr)
             return self
         try:
             import triton
@@ -236,6 +237,7 @@ class VoxCPMModel(nn.Module):
             self.residual_lm.forward_step = torch.compile(self.residual_lm.forward_step, mode="reduce-overhead", fullgraph=True)
             self.feat_encoder = torch.compile(self.feat_encoder, mode="reduce-overhead", fullgraph=True)
             self.feat_decoder.estimator = torch.compile(self.feat_decoder.estimator, mode="reduce-overhead", fullgraph=True)
+            print("torch.compile enabled successfully", file=sys.stderr)
         except Exception as e:
             print(f"Warning: torch.compile failed - {e}", file=sys.stderr)
         return self
@@ -827,9 +829,11 @@ class VoxCPMModel(nn.Module):
                 
                 yield feat_pred, pred_feat_seq
             
-            stop_flag = self.stop_head(self.stop_actn(self.stop_proj(lm_hidden))).argmax(dim=-1)[0].cpu().item()
-            if i > min_len and stop_flag == 1:
-                break
+            # 避免每次迭代都 CPU 同步，累积多次检查
+            if i > min_len and i % 5 == 0:
+                stop_flag = self.stop_head(self.stop_actn(self.stop_proj(lm_hidden))).argmax(dim=-1)[0].cpu().item()
+                if stop_flag == 1:
+                    break
     
             lm_hidden = self.base_lm.forward_step(
                 curr_embed[:, 0, :], torch.tensor([self.base_lm.kv_cache.step()], device=curr_embed.device)

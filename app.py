@@ -238,7 +238,7 @@ def create_demo_interface(demo: VoxCPMDemo):
                 )
                 with gr.Row():
                     prompt_text = gr.Textbox(
-                        value="每天只需聆听几分钟，你就能通过积极的心态消除负面想法。",
+                        value="Just by listening a few minutes a day, you'll be able to eliminate negative thoughts by conditioning your mind to be more positive.",
                         label="参考文本",
                         placeholder="请输入参考文本。支持自动识别，您可以自行修正结果..."
                     )

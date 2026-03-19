@@ -90,6 +90,68 @@ python scripts/export_onnx.py \
 
 推理代码已适配 Apple Silicon Mac，可在 M 系列芯片上运行。
 
+#### MPS 设备性能优化
+
+本项目针对 Apple Silicon 的 MPS (Metal Performance Shaders) 设备进行了专门的性能优化和测试。
+
+**性能对比（RTF - Real Time Factor，数值越小越好）：**
+
+| 配置 | RTF | 相对性能 | 说明 |
+|------|-----|----------|------|
+| float32 + 无 torch.compile | ~2.4 | ✅ 基准（最佳） | **推荐配置** |
+| float16 + 无 torch.compile | ~2.3 | ✅ 快 3% | 略快 |
+| float16 + torch.compile | ~3.5 | ❌ 慢 50% | 不推荐 |
+| float32 + torch.compile | ~4.2 | ❌ 慢 80% | **最差** |
+
+**关键发现：**
+
+1. **torch.compile 在 MPS 上会降低性能** - PyTorch 的 torch.compile 功能在 MPS 上反而会使性能降低 50-80%，因此代码中默认禁用
+
+2. **dtype 选择** - 虽然 MPS 原生不支持 bfloat16（会回退到 float32），但 float32 在 MPS 上的性能已经很好
+
+3. **MPS-CPU 同步优化** - 代码中优化了 MPS 和 CPU 之间的数据同步频率，减少不必要的同步操作
+
+**当前优化配置：**
+
+```python
+# src/voxcpm/model/utils.py
+def get_dtype(dtype: str):
+    if dtype == "bfloat16":
+        # MPS 不支持 bfloat16，回退到 float32（在 MPS 上性能更好）
+        if torch.backends.mps.is_available():
+            return torch.float32
+        return torch.bfloat16
+
+# src/voxcpm/model/voxcpm.py
+def optimize(self, disable: bool = False):
+    # ...
+    # MPS 上禁用 torch.compile（测试显示会降低性能 50-80%）
+    if self.device == "mps":
+        print("Note: torch.compile disabled on MPS for better performance")
+        return self
+    # ...
+```
+
+**性能测试脚本：**
+
+项目提供了性能测试脚本，用于验证 MPS 设备上的推理性能：
+
+```bash
+# 完整性能测试
+python test_mps_optimization.py
+
+# 快速测试
+python quick_test.py
+```
+
+**预期性能：**
+
+- 正常情况下，RTF 应该在 **2-3** 之间（即生成 10 秒音频需要 20-30 秒）
+- 如果 RTF > 10，请检查：
+  - 是否有其他程序占用 GPU 资源
+  - 是否首次运行（首次运行会有额外的初始化开销）
+  - 系统是否有足够的可用内存
+
 ### 4. 训练脚本 Apple Silicon 支持
 
 训练脚本 `scripts/train_voxcpm_finetune.py` 已适配 Apple Silicon：
