@@ -15,6 +15,7 @@ class VoxCPM:
             optimize: bool = True,
             lora_config: Optional[LoRAConfig] = None,
             lora_weights_path: Optional[str] = None,
+            device: Optional[str] = None,
         ):
         """Initialize VoxCPM TTS pipeline.
 
@@ -26,13 +27,25 @@ class VoxCPM:
                 id or local path. If None, denoiser will not be initialized.
             enable_denoiser: Whether to initialize the denoiser pipeline.
             optimize: Whether to optimize the model with torch.compile. True by default, but can be disabled for debugging.
-            lora_config: LoRA configuration for fine-tuning. If lora_weights_path is 
+            lora_config: LoRA configuration for fine-tuning. If lora_weights_path is
                 provided without lora_config, a default config will be created.
             lora_weights_path: Path to pre-trained LoRA weights (.pth file or directory
                 containing lora_weights.ckpt). If provided, LoRA weights will be loaded.
+            device: Target device for model inference (e.g., "cuda", "mps", "cpu").
+                If None, device will be auto-detected (preferring cuda > mps > cpu).
         """
         print(f"voxcpm_model_path: {voxcpm_model_path}, zipenhancer_model_path: {zipenhancer_model_path}, enable_denoiser: {enable_denoiser}", file=sys.stderr)
-        
+
+        # 自动检测设备（如果未指定）
+        if device is None:
+            import torch
+            if torch.cuda.is_available():
+                device = "cuda"
+            elif torch.backends.mps.is_available():
+                device = "mps"
+            else:
+                device = "cpu"
+
         # If lora_weights_path is provided but no lora_config, create a default one
         if lora_weights_path is not None and lora_config is None:
             lora_config = LoRAConfig(
@@ -41,8 +54,8 @@ class VoxCPM:
                 enable_proj=False,
             )
             print(f"Auto-created default LoRAConfig for loading weights from: {lora_weights_path}", file=sys.stderr)
-        
-        self.tts_model = VoxCPMModel.from_local(voxcpm_model_path, optimize=optimize, lora_config=lora_config)
+
+        self.tts_model = VoxCPMModel.from_local(voxcpm_model_path, optimize=optimize, lora_config=lora_config, device=device)
         
         # Load LoRA weights if path is provided
         if lora_weights_path is not None:

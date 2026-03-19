@@ -211,7 +211,8 @@ def export_voxcpm_prefill(
     """导出 Prefill 阶段到 ONNX"""
     logger.info("正在导出 VoxCPM Prefill 阶段...")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 使用模型所在的设备，而不是硬编码 CUDA
+    device = next(model.parameters()).device
     model = model.to(torch.float32).to(device)
     model.eval()
     set_seed(42)
@@ -360,7 +361,8 @@ def export_voxcpm_decode(
     """导出 Decode 阶段到 ONNX"""
     logger.info("正在导出 VoxCPM Decode 阶段...")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 使用模型所在的设备，而不是硬编码 CUDA
+    device = next(model.parameters()).device
     model = model.to(torch.float32).to(device)
     model.eval()
     set_seed(42)

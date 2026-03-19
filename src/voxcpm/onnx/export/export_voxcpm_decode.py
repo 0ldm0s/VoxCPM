@@ -173,11 +173,11 @@ def export_voxcpm_decode(
     """Export VoxCPMDecode single-step to ONNX with fixed timesteps wrapper and dynamic cfg_value."""
     logger.info("Exporting VoxCPM Decode step...")
 
-    # Ensure wrapper runs in float32, use GPU if available for better performance
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # 使用模型所在的设备，而不是硬编码 CUDA
+    device = next(model.parameters()).device
     model = model.to(torch.float32).to(device)
     model.eval()
-    
+
     logger.info(f"Using device: {device}")
 
     set_seed(42)

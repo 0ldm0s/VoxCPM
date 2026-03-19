@@ -34,11 +34,18 @@ class VoxCPMDemo:
 
         # ASR model for prompt text recognition
         self.asr_model_id = "iic/SenseVoiceSmall"
+        # ASR 模型设备设置：MPS 对某些 ASR 操作可能不稳定，使用 CPU 作为备选
+        # 如果 MPS 可用且不是 CUDA，则使用 CPU（因为 SenseVoice 可能不支持 MPS）
+        if self.device == "cuda":
+            asr_device = "cuda:0"
+        else:
+            # MPS 和 CPU 情况下都使用 CPU（SenseVoice 对 MPS 支持不佳）
+            asr_device = "cpu"
         self.asr_model: Optional[AutoModel] = AutoModel(
             model=self.asr_model_id,
             disable_update=True,
             log_level='DEBUG',
-            device="cuda:0" if self.device == "cuda" else "cpu",
+            device=asr_device,
         )
 
         # TTS model (lazy init)
@@ -77,7 +84,11 @@ class VoxCPMDemo:
         print("Model not loaded, initializing...", file=sys.stderr)
         model_dir = self._resolve_model_dir()
         print(f"Using model dir: {model_dir}", file=sys.stderr)
-        self.voxcpm_model = voxcpm.VoxCPM(voxcpm_model_path=model_dir)
+        # 传递设备参数，确保使用正确的设备（MPS/CPU/CUDA）
+        self.voxcpm_model = voxcpm.VoxCPM(
+            voxcpm_model_path=model_dir,
+            device=self.device
+        )
         print("Model loaded successfully.", file=sys.stderr)
         return self.voxcpm_model
 
