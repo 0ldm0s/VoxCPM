@@ -1,0 +1,15 @@
+[package]
+name = "voxcpm_onnx_test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# ONNX Runtime
+ort = "2.0"
+
+# 音频处理
+hound = "3.5"
+
+# 实用工具
+ndarray = "0.16"
+anyhow = "1.0"

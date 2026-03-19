@@ -4,3 +4,18 @@ voxcpm.egg-info
 .DS_Store
 CLAUDE.md
 .claude/
+
+# ONNX 模型文件（通常很大）
+*.onnx
+*.onnx.data
+onnx_models/
+
+# 模型权重文件
+models/
+*.safetensors
+*.pth
+*.ckpt
+*.bin
+
+# Rust 构建产物
+rust/target/

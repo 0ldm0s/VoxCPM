@@ -848,8 +848,10 @@ class VoxCPMModel(nn.Module):
             
 
     @classmethod
-    def from_local(cls, path: str, optimize: bool = True, training: bool = False, lora_config: LoRAConfig = None):
+    def from_local(cls, path: str, optimize: bool = True, training: bool = False, lora_config: LoRAConfig = None, device: str = None):
         config = VoxCPMConfig.model_validate_json(open(os.path.join(path, "config.json")).read())
+        if device is not None:
+            config.device = device  # 强制使用指定设备
         tokenizer = LlamaTokenizerFast.from_pretrained(path)
         audio_vae_config = getattr(config, 'audio_vae_config', None)
         audio_vae = AudioVAE(config=audio_vae_config) if audio_vae_config else AudioVAE()
