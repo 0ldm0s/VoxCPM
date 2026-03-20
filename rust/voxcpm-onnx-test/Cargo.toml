@@ -5,11 +5,21 @@ edition = "2024"
 
 [dependencies]
 # ONNX Runtime
-ort = "2.0"
+ort = { version = "2.0.0-rc.12", features = ["fetch-models"] }
 
 # 音频处理
 hound = "3.5"
+rubato = "0.14"
+
+# 数值计算
+ndarray = { version = "0.16", features = ["rayon"] }
+num-traits = "0.2"
 
 # 实用工具
-ndarray = "0.16"
 anyhow = "1.0"
+
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+
+# CLI
+clap = { version = "4.0", features = ["derive"] }

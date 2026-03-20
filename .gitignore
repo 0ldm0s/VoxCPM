@@ -4,6 +4,7 @@ voxcpm.egg-info
 .DS_Store
 CLAUDE.md
 .claude/
+references/
 
 # ONNX 模型文件（通常很大）
 *.onnx
@@ -17,5 +18,6 @@ models/
 *.ckpt
 *.bin
 
-# Rust 构建产物
-rust/target/
+# Rust 构建产物（包括子目录）
+rust/**/target/
+rust/**/Cargo.lock
