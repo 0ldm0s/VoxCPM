@@ -85,15 +85,18 @@ class _UnifiedCFMWithoutInferenceMode(nn.Module):
         n_timesteps: int,
         patch_size: int,
         cond: torch.Tensor,
+        noise: torch.Tensor,
         temperature: float = 1.0,
         cfg_value: float = 1.0,
         sway_sampling_coef: float = 1.0,
         use_cfg_zero_star: bool = True,
     ):
-        """不使用 inference_mode 的 forward 方法"""
+        """不使用 inference_mode 的 forward 方法，使用外部噪声输入"""
         b, _ = mu.shape
         t = patch_size
-        z = torch.randn((b, self.in_channels, t), device=mu.device, dtype=mu.dtype) * temperature
+        # noise 形状为 (batch, patch_size, feat_dim)，需要转置为 (batch, feat_dim, patch_size)
+        # 这样可以匹配原来的 torch.randn((b, self.in_channels, t)) 形状
+        z = noise.transpose(1, 2) * temperature
 
         t_span = torch.linspace(1, 0, n_timesteps + 1, device=mu.device, dtype=mu.dtype)
         t_span = t_span + sway_sampling_coef * (torch.cos(torch.pi / 2 * t_span) - 1 + t_span)
@@ -171,11 +174,12 @@ class VoxCPMDecode(nn.Module):
         # # to avoid creating separate small models for ONNX export
 
         # 2) Diffusion decoder to predict next patch features using input DiT hidden
-        # 注意：noise 参数在 ONNX 导出中不使用，因为 UnifiedCFM 内部会生成噪声
+        # 传递 noise 参数给 feat_decoder，避免内部生成随机噪声
         pred_feat = self.feat_decoder(
             mu=dit_hidden,
             patch_size=self.patch_size,
             cond=prefix_feat_cond.transpose(1, 2).contiguous(),
+            noise=noise,
             n_timesteps=inference_timesteps,
             cfg_value=cfg_value,
         ).transpose(1, 2)  # [b, p, d]

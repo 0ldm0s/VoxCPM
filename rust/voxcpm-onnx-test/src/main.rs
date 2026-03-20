@@ -278,22 +278,44 @@ fn test_voxcpm_decode_step(onnx_dir: &str) -> Result<()> {
     }
 
     // 创建测试输入
+    let batch_size = 1;
     let hidden_dim = 1024;
-
-    // dit_hidden: (hidden_dim,)
-    let dit_hidden_data: Vec<f32> = vec![0.1; hidden_dim];
-    let dit_hidden_shape = vec![hidden_dim as i64];
-
-    // kv_cache: 简化测试，使用较小的 cache
-    let cache_size = 32;
-    let num_heads = 16;
+    let num_layers_base = 24;
+    let num_heads_base = 2;
+    let num_layers_res = 8;
+    let num_heads_res = 2;
+    let past_seq_len = 10;
     let head_dim = 64;
-    let kv_cache_data: Vec<f32> = vec![0.0; cache_size * num_heads * head_dim];
-    let kv_cache_shape = vec![cache_size, num_heads, head_dim];
+    let patch_size = 4;
+    let feat_dim = 64;
 
-    // noise: (batch, 1)
-    let noise_data: Vec<f32> = vec![0.5, 0.5];
-    let noise_shape = vec![2, 1];
+    // dit_hidden: [batch_size, hidden_dim]
+    let dit_hidden_data: Vec<f32> = vec![0.1; batch_size * hidden_dim];
+    let dit_hidden_shape = vec![batch_size, hidden_dim];
+
+    // base_next_keys: [batch_size, num_layers_base, num_heads_base, past_seq_len, head_dim]
+    let base_next_keys_data: Vec<f32> = vec![0.0; batch_size * num_layers_base * num_heads_base * past_seq_len * head_dim];
+    let base_next_keys_shape = vec![batch_size, num_layers_base, num_heads_base, past_seq_len, head_dim];
+
+    // base_next_values: same as keys
+    let base_next_values_data: Vec<f32> = base_next_keys_data.clone();
+    let base_next_values_shape = base_next_keys_shape.clone();
+
+    // residual_next_keys: [batch_size, num_layers_res, num_heads_res, past_seq_len, head_dim]
+    let residual_next_keys_data: Vec<f32> = vec![0.0; batch_size * num_layers_res * num_heads_res * past_seq_len * head_dim];
+    let residual_next_keys_shape = vec![batch_size, num_layers_res, num_heads_res, past_seq_len, head_dim];
+
+    // residual_next_values: same as keys
+    let residual_next_values_data: Vec<f32> = residual_next_keys_data.clone();
+    let residual_next_values_shape = residual_next_keys_shape.clone();
+
+    // prefix_feat_cond: [batch_size, patch_size, feat_dim]
+    let prefix_feat_cond_data: Vec<f32> = vec![0.1; batch_size * patch_size * feat_dim];
+    let prefix_feat_cond_shape = vec![batch_size, patch_size, feat_dim];
+
+    // noise: [batch_size, patch_size, feat_dim]
+    let noise_data: Vec<f32> = vec![0.5; batch_size * patch_size * feat_dim];
+    let noise_shape = vec![batch_size, patch_size, feat_dim];
 
     // cfg_value: scalar
     let cfg_data: Vec<f32> = vec![2.0];
@@ -301,13 +323,16 @@ fn test_voxcpm_decode_step(onnx_dir: &str) -> Result<()> {
 
     println!("  🎵 测试输入:");
     println!("    dit_hidden.shape = {:?}", dit_hidden_shape);
-    println!("    kv_cache.shape = {:?}", kv_cache_shape);
     println!("    noise.shape = {:?}", noise_shape);
     println!("    cfg_value.shape = {:?}", cfg_shape);
 
     // 运行推理
     let dit_hidden_tensor = Tensor::from_array((dit_hidden_shape, dit_hidden_data))?;
-    let kv_cache_tensor = Tensor::from_array((kv_cache_shape, kv_cache_data))?;
+    let base_next_keys_tensor = Tensor::from_array((base_next_keys_shape, base_next_keys_data))?;
+    let base_next_values_tensor = Tensor::from_array((base_next_values_shape, base_next_values_data))?;
+    let residual_next_keys_tensor = Tensor::from_array((residual_next_keys_shape, residual_next_keys_data))?;
+    let residual_next_values_tensor = Tensor::from_array((residual_next_values_shape, residual_next_values_data))?;
+    let prefix_feat_cond_tensor = Tensor::from_array((prefix_feat_cond_shape, prefix_feat_cond_data))?;
     let noise_tensor = Tensor::from_array((noise_shape, noise_data))?;
     let cfg_tensor = Tensor::from_array((cfg_shape, cfg_data))?;
 
@@ -316,13 +341,26 @@ fn test_voxcpm_decode_step(onnx_dir: &str) -> Result<()> {
         .map(|o| o.name().to_string())
         .collect();
 
-    let outputs = session.run(ort::inputs![dit_hidden_tensor, kv_cache_tensor, noise_tensor, cfg_tensor])?;
+    let outputs = session.run(ort::inputs![
+        dit_hidden_tensor,
+        base_next_keys_tensor,
+        base_next_values_tensor,
+        residual_next_keys_tensor,
+        residual_next_values_tensor,
+        prefix_feat_cond_tensor,
+        noise_tensor,
+        cfg_tensor,
+    ])?;
 
     println!("  📊 推理输出:");
     for name in output_names {
         if let Some(out) = outputs.get(&name) {
-            let (shape, _data) = out.try_extract_tensor::<f32>()?;
-            println!("    {} -> {:?}", name, shape);
+            // 尝试提取 f32 或 bool 类型
+            if let Ok((shape, _data)) = out.try_extract_tensor::<f32>() {
+                println!("    {} -> {:?}", name, shape);
+            } else if let Ok((shape, _data)) = out.try_extract_tensor::<bool>() {
+                println!("    {} -> {:?}", name, shape);
+            }
         }
     }
     println!("  ✅ VoxCPM Decode Step 推理成功");
